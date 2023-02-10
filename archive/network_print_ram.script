@@ -1,0 +1,12 @@
+var list = JSON.parse(read("/data/network_info.txt")).list;
+var list_length = list.length;
+var total_ram = 0;
+for (var i = 0; i < list_length; ++i) {
+    var host = list[i];
+    var stats = getServer(host);
+    if (stats.maxRam > 0 && !stats.purchasedByPlayer) {
+        tprintf("%-18s: %d", host, stats.maxRam);
+        total_ram += stats.maxRam
+    }
+}
+tprintf("\nTotal RAM: %d", total_ram);

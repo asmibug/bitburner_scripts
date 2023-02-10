@@ -1,0 +1,28 @@
+function main() {
+    var host = "n00dles";
+    var h = 0.004125;
+    var g = 1.1105070109143849;
+    var p_g = -Math.log(1 - h) / Math.log(g) * 1.1;
+    var p_w = (0.04 + 0.08 * p_g) * 1.1;
+    printf("INFO p_g=%f, p_w=%f", p_g, p_w);
+    var total_money = 0;
+    var start = Date.now();
+    while (true) {
+        for (var i = 0; i < 25; ++i) {
+            var money = hack(host);
+            if (money) {
+                total_money += money;
+                break;
+            }
+        }
+        if (Math.random() < p_g) {
+            grow(host);
+        }
+        if (Math.random() < p_w) {
+            weaken(host);
+        }
+        printf("INFO cashflow=%s", total_money / (Date.now() - start) * 1000);
+    } 
+}
+
+main();

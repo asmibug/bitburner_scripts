@@ -1,0 +1,1 @@
+tprintf("Total script income: %s / sec", nFormat(getTotalScriptIncome()[0], "0.000a"));

@@ -1,0 +1,77 @@
+import {
+    solve, calc_rhs, calc_rgs,
+} from "lib.script";
+
+function main() {
+    var host = args[0];
+    var g = args[1];
+    var m = args[2];
+    var host_for_scripts = args[3];
+
+    var m0 = getServerMoneyAvailable(host);
+    if (m0 != m) {
+        var rs = calc_rgs(g, m, m0);
+        var r_g = rs.r_g;
+        var r_wg = rs.r_wg;
+        var weaken_time_max = getWeakenTime(host);
+        exec("hack_weaken.script", host_for_scripts, r_wg, host);
+        var weaken_start = Date.now();
+        exec("hack_grow.script", host_for_scripts, r_g, host);
+        sleep(weaken_start + weaken_time_max - Date.now());
+    }
+
+    var step_time = 1000;
+
+    var s = getServerMinSecurityLevel(host);
+
+    var r_g = Math.ceil(-Math.log(0.2) / Math.log(g));
+    var r_wg = Math.ceil(0.08 * r_g);
+
+    while (true) {
+        var r_h = Math.floor(0.8 / hackAnalyze(host));
+        var r_wh = Math.ceil(0.04 * r_h);
+        var process_time = getWeakenTime(host) + step_time;
+
+        var step_start_time = Date.now();
+        var process_start_time = step_start_time + process_time - getHackTime(host);
+        exec("hack_wait_hack.script", host_for_scripts, r_h, host, process_start_time);
+        if (step_start_time + step_time - 100 <= Date.now()) {
+            throw "hack: too slow";
+        }
+
+        step_start_time += step_time;
+        process_start_time = step_start_time + process_time - getWeakenTime(host);
+        exec("hack_wait_weaken.script", host_for_scripts, r_wh, host, process_start_time);
+        if (step_start_time + step_time - 100 <= Date.now()) {
+            throw "weaken hack: too slow";
+        }
+
+        step_start_time += step_time;
+        process_start_time = step_start_time + process_time - getGrowTime(host);
+        exec("hack_wait_grow.script", host_for_scripts, r_g, host, process_start_time);
+        if (step_start_time + step_time - 100 <= Date.now()) {
+            throw "grow: too slow";
+        }
+
+        step_start_time += step_time;
+        process_start_time = step_start_time + process_time - getWeakenTime(host);
+        exec("hack_wait_weaken.script", host_for_scripts, r_wg, host, process_start_time);
+        if (step_start_time + step_time - 100 <= Date.now()) {
+            throw "weaken grow: too slow";
+        }
+
+        sleep(step_start_time + process_time - Date.now() + 100);
+
+        // DEBUG CHECKS
+        var s0 = getServerSecurityLevel(host);
+        var m0 = getServerMoneyAvailable(host);
+        if (s0 - s > 0.001) {
+            throw sprintf("%s: %f=s != s0=%f", host, s, s0);
+        }
+        if (m0 != m) {
+            throw sprintf("%s: %f=m != m0=%f", host, m, m0);
+        }
+    }
+}
+
+main();

@@ -1,0 +1,16 @@
+import {
+    networkInfoGetFilename, networkInfoGet,
+} from "lib.script";
+
+function main() {
+    function print_ls(host) {
+        var files = ls(host, args[0]);
+        if (files.length) {
+            tprintf("%-18s:\n    %s", host, files.join("\n    "));
+        }
+    }
+
+    networkInfoGet().list.map(print_ls);
+}
+
+main();

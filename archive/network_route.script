@@ -1,0 +1,13 @@
+import {networkInfoGetFilename, networkInfoGet} from "lib.script";
+
+function main() {
+    if (!args.length) {
+        throw "Please specify hostname";
+    }
+
+    var host = args[0]
+    var network_info = networkInfoGet();
+    tprintf("connect %s", network_info.route[host].slice(1).join("; connect "));
+}
+
+main()

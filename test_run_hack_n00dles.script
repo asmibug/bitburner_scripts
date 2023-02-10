@@ -1,0 +1,93 @@
+import {
+    networkInfoGetFilename,
+    networkInfoGet,
+    networkInfoGetPortsRequired,
+    networkInfoGetMaxRam,
+} from "lib.script";
+
+var SCRIPT = "test_hack_n00dles.script";
+var SCRIPT_MEM = 1.85;
+
+
+function nukeAll(network_info) {
+    // req: networkInfoGetPortsRequired
+    var program_names = [
+        "BruteSSH.exe",
+        "FTPCrack.exe",
+        "relaySMTP.exe",
+        "HTTPWorm.exe",
+        "SQLInject.exe",
+    ];
+    var program_names_length = program_names.length;
+    var program_funcs = [brutessh, ftpcrack, relaysmtp, httpworm, sqlinject];
+
+    var programs_available = [];
+    for (var i = 0; i < program_names_length; ++i) {
+        if (fileExists(program_names[i])) {
+            programs_available.push(program_funcs[i]);
+        }
+    }
+    var programs_available_num = programs_available.length;
+
+    var hosts_list = network_info.list;
+    var hosts_list_length = hosts_list.length;
+    var hosts_stats = network_info.stats;
+    var hosts_nuked_num = 0;
+    for (var i = 0; i < hosts_list_length; ++i) {
+        var host = hosts_list[i];
+        if (networkInfoGetPortsRequired(hosts_stats[host]) > programs_available_num
+                || hasRootAccess(host)) {
+            continue;
+        }
+        for (var j = 0; j < programs_available_num; ++j) {
+            programs_available[j](host);
+        }
+        nuke(host);
+        ++hosts_nuked_num;
+    }
+    return {programs_available_num: programs_available_num,
+            hosts_nuked_num: hosts_nuked_num};
+}
+
+function execHackOnAll(network_info) {
+    // req: networkInfoGetMaxRam
+    var hosts_list = network_info.list;
+    var hosts_list_length = hosts_list.length;
+    var hosts_stats = network_info.stats;
+    for (var i = 0; i < hosts_list_length; ++i) {
+        var host = hosts_list[i];
+        if (!hasRootAccess(host)) {
+            continue;
+        }
+        var threads = Math.floor(
+            (networkInfoGetMaxRam(hosts_stats[host]) - getServerUsedRam(host)) / SCRIPT_MEM
+        );
+        if (threads > 0) {
+            scp(["lib.script", SCRIPT], host);
+            exec(SCRIPT, host, threads);
+        }
+    }
+}
+
+function main() {
+    printf("INFO reading network info from %s", networkInfoGetFilename());
+    var network_info = networkInfoGet();
+
+    var programs_available_num = 0;
+    while (programs_available_num < 5) {
+        printf("INFO rooting servers");
+        var nuke_info = nukeAll(network_info);
+        programs_available_num = nuke_info.programs_available_num;
+        printf("INFO DONE rooting servers; programs available: %d, servers nuked: %d",
+            programs_available_num, nuke_info.hosts_nuked_num);
+
+        printf("INFO exec hack scripts on all servers");
+        execHackOnAll(network_info);
+        printf("INFO DONE exec hack scripts on all servers");
+
+        sleep(1 * 1000);
+    }
+
+}
+
+main();

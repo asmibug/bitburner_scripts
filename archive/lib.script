@@ -1,0 +1,247 @@
+function nF(num) {
+    return nFormat(num, "0.000a");
+}
+
+function getLowerN(max_n, max_cost, cost_func) {
+    // invariant: all cost_func(i) up to l inclusive is <= max_cost
+    // invariant: all cost_func(i) to the right of r is > max_cost
+    if (cost_func(max_n) <= max_cost) {  // optimization
+        return max_n;
+    }
+    var l = 0;
+    var r = max_n;
+    while (l < r) {
+        var m = Math.ceil((l + r) / 2);
+        if (cost_func(m) <= max_cost) {
+            l = m;
+        } else {
+            r = m - 1;
+        }
+    }
+    return l;
+}
+
+function minAndIdx(array) {
+    var length = array.length;
+    if (!length) {
+        throw "minAndIdx: zero length arrays are not allowed";
+    }
+    var min = array[0];
+    var idx = 0;
+    for (var i = 1; i < array.length; ++i) {
+        if (array[i] < min) {
+            min = array[i];
+            idx = i;
+        }
+    }
+    return [min, idx];
+}
+
+function solve(func, x_0) {
+    var x = func(x_0);
+    while (Math.abs(x - x_0) > 0.1) {
+        x_0 = x;
+        x = func(x_0);
+    }
+    return x;
+}
+
+function processNetwork(host, processed_hosts, callback_pre, callback_post) {
+    if (callback_pre) {
+        callback_pre(host);
+    }
+    processed_hosts[host] = true;
+    var connected = scan(host);
+    for (var i = 0; i < connected.length; ++i) {
+        if (!processed_hosts[connected[i]]) {
+            processNetwork(connected[i], processed_hosts, callback_pre, callback_post);
+        }
+    }
+    if (callback_post) {
+        callback_post(host);
+    }
+}
+
+function processTree(host, parent, callback_pre, callback_post) {
+    if (callback_pre) {
+        callback_pre(host);
+    }
+    var connected = scan(host);
+    for (var i = 0; i < connected.length; ++i) {
+        if (connected[i] != parent) {
+            processTree(connected[i], host, callback_pre, callback_post);
+        }
+    }
+    if (callback_post) {
+        callback_post(host);
+    }
+}
+
+function networkInfoGetFilename() {
+    return "/data/network_info.txt";
+}
+
+function networkInfoGetScriptname() {
+    return "network_save.script";
+}
+
+function networkInfoCreateWithRun() {
+    // req: networkInfoGetScriptname
+    var script_name = networkInfoGetScriptname();
+    var pid = run(script_name);
+    if (!pid) {
+        throw sprintf("Could not run %s, please run manually", script_name);
+    }
+    while (isRunning(pid)) {
+        sleep(1000);
+    }
+}
+
+function networkInfoCreateWithExec(host) {
+    // req: networkInfoGetScriptname
+    var script_name = networkInfoGetScriptname();
+    var pid = exec(script_name, host);
+    if (!pid) {
+        throw sprintf("Could not exec %s on %s, please run manually", script_name, host);
+    }
+    while (isRunning(pid)) {
+        sleep(1000);
+    }
+}
+
+function networkInfoGet() {
+    // req: networkInfoGetFilename
+    var network_info_str = read(networkInfoGetFilename());
+    if (!network_info_str.length) {
+        throw sprintf("No network info in %s", networkInfoGetFilename());
+    }
+    return JSON.parse(network_info_str);
+}
+
+function networkInfoGetStats(host) {
+    return [
+        getServerNumPortsRequired(host),
+        getServerMaxRam(host),
+        getServerRequiredHackingLevel(host),
+        getServerMinSecurityLevel(host),
+        getServerMaxMoney(host),
+    ];
+}
+
+function networkInfoGetPortsRequired(stats) {
+    return stats[0];
+}
+
+function networkInfoGetMaxRam(stats) {
+    return stats[1];
+}
+
+function networkInfoGetLevelRequired(stats) {
+    return stats[2];
+}
+
+function networkInfoGetMinSecurity(stats) {
+    return stats[3];
+}
+
+function networkInfoGetMaxMoney(stats) {
+    return stats[4];
+}
+
+function nukeAll(network_info) {
+    // req: networkInfoGetPortsRequired
+    var program_names = [
+        "BruteSSH.exe",
+        "FTPCrack.exe",
+        "relaySMTP.exe",
+        "HTTPWorm.exe",
+        "SQLInject.exe",
+    ];
+    var program_names_length = program_names.length;
+    var program_funcs = [brutessh, ftpcrack, relaysmtp, httpworm, sqlinject];
+
+    var programs_available = [];
+    for (var i = 0; i < program_names_length; ++i) {
+        if (fileExists(program_names[i])) {
+            programs_available.push(program_funcs[i]);
+        }
+    }
+    var programs_available_num = programs_available.length;
+
+    var hosts_list = network_info.list;
+    var hosts_list_length = hosts_list.length;
+    var hosts_stats = network_info.stats;
+    var hosts_nuked_num = 0;
+    for (var i = 0; i < hosts_list_length; ++i) {
+        var host = hosts_list[i];
+        if (networkInfoGetPortsRequired(hosts_stats[host]) > programs_available_num
+                || hasRootAccess(host)) {
+            continue;
+        }
+        for (var j = 0; j < programs_available_num; ++j) {
+            programs_available[j](host);
+        }
+        nuke(host);
+        ++hosts_nuked_num;
+    }
+    return {programs_available_num: programs_available_num,
+            hosts_nuked_num: hosts_nuked_num};
+}
+
+function hackTryNonzero(host) {
+    var money = 0;
+    for (var i = 0; i < 25; ++i) {
+        money = hack(host);
+        if (money) {
+            break;
+        }
+    }
+    return money;
+}
+
+function calc_rhs(h, g) {
+    // req: solve
+    function get_rh(r) {
+        return (1 - Math.exp(-(1.04 / 1.08 * Math.log(g) + 2 * h) * r)) / h;
+    }
+    var r_h = Math.floor(solve(get_rh, 0.9 / h));
+    var r_wh = Math.ceil(0.04 * r_h);
+    printf("INFO r_h = %d, h = %f, h * r_h = %f",
+            r_h, h, h * r_h);
+    return {r_h: r_h, r_wh: r_wh};
+}
+
+function calc_rgs(g, m, m0) {
+    // req: solve
+    function get_rg(r) {
+        return (Math.log(m) - Math.log(r + m0)) / Math.log(g);
+    }
+    var r_g0 = Math.ceil(-Math.log((m0 || 1) / m) / Math.log(g));
+    var r_g = Math.ceil(solve(get_rg, r_g0));
+    var r_wg = Math.ceil(0.08 * r_g);
+    printf("INFO r_g = %d, r_g0 = %d, r_g0 / r_g = %f, m0=%f, m=%f",
+            r_g, r_g0, r_g0 / r_g, m0, m);
+    return {r_g: r_g, r_wg: r_wg};
+}
+
+function timeDiffGet() {
+    var fname = "/data/time_diff.txt"
+    var s = read(fname);
+    if (s.length) {
+        return JSON.parse(s);
+    }
+    var start, end;
+    var diff_sum = 0;
+    var n = 0;
+    tprintf("INFO Calculating time diff");
+    Array.apply(null, Array(100)).map(function () {
+        start = Date.now();
+        end = Date.now();
+        diff_sum += end - start;
+        ++n;
+    });
+    var diff = diff_sum / n;
+    tprintf("INFO saving time diff = %f to %s", diff, fname);
+    write(fname, diff, "w");
+    return diff;
+}

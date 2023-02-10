@@ -1,0 +1,39 @@
+function main() {
+    var nuke_name = "NUKE.exe";
+    if (!fileExists(nuke_name)) {
+        throw sprintf("Cannot nuke without %s", nuke_name);
+    }
+
+    var list = JSON.parse(read("/data/network_info.txt")).list;
+    var list_length = list.length;
+    for (var i = 0; i < list_length; ++i) {
+        var host = list[i];
+        var ports_opened = 0;
+        if (fileExists("BruteSSH.exe")) {
+            brutessh(host);
+            ++ports_opened;
+        }
+        if (fileExists("FTPCrack.exe")) {
+            ftpcrack(host);
+            ++ports_opened;
+        }
+        if (fileExists("relaySMTP.exe")) {
+            relaysmtp(host);
+            ++ports_opened;
+        }
+        if (fileExists("HTTPWorm.exe")) {
+            httpworm(host);
+            ++ports_opened;
+        }
+        if (fileExists("SQLInject.exe")) {
+            sqlinject(host);
+            ++ports_opened;
+        }
+        if (ports_opened >= getServerNumPortsRequired(host)) {
+            nuke(host);
+        }
+    }
+}
+
+
+main()

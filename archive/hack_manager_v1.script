@@ -1,0 +1,72 @@
+import {
+    solve, calc_rhs, calc_rgs,
+} from "lib.script";
+
+function main() {
+    var host = args[0];
+    sleep(getWeakenTime(host));  // for the case of restart
+
+    var g = args[1];
+    var m = args[2];
+    var host_for_scripts = args[3];
+
+    var rs, r_g, r_wg;
+    var m0 = getServerMoneyAvailable(host);
+    if (m0 != m) {
+        rs = calc_rgs(g, m, m0); r_g = rs.r_g; r_wg = rs.r_wg;
+        var weaken_time_max = getWeakenTime(host);
+        exec("hack_weaken.script", host_for_scripts, r_wg, host);
+        var weaken_start = Date.now();
+        exec("hack_grow.script", host_for_scripts, r_g, host);
+        sleep(weaken_start + weaken_time_max - Date.now());
+    }
+
+    rs = calc_rhs(hackAnalyze(host), g);
+    var r_h = rs.r_h;
+    var r_wh = rs.r_wh;
+    while (true) {
+        var weaken_time_max = getWeakenTime(host);
+        exec("hack_weaken.script", host_for_scripts, r_wh, host);
+        var weaken_start = Date.now();
+        var weaken_time_min = getWeakenTime(host);
+        var hack_time_max = getHackTime(host);
+        do {
+            exec("hack_hack.script", host_for_scripts, r_h, host);
+            sleep(hack_time_max);
+            m0 = getServerMoneyAvailable(host);
+            hack_time_max = getHackTime(host);
+        } while (m0 == m && Date.now() + hack_time_max + 1000 < weaken_start + weaken_time_min);
+        rs = calc_rgs(g, m, m0); r_g = rs.r_g; r_wg = rs.r_wg;
+        sleep(weaken_start + weaken_time_max - Date.now());
+
+        // DEBUG CHECKS
+        var s = getServerMinSecurityLevel(host);
+        var s0 = getServerSecurityLevel(host);
+        if (s0 - s > 0.001) {
+            throw sprintf("%s after hack: %f=s != s0=%f", host, s, s0);
+        }
+
+        if (m0 == m) {
+            continue;
+        }
+        weaken_time_max = getWeakenTime(host);
+        exec("hack_weaken.script", host_for_scripts, r_wg, host);
+        weaken_start = Date.now();
+        exec("hack_grow.script", host_for_scripts, r_g, host);
+        rs = calc_rhs(hackAnalyze(host), g); r_h = rs.r_h; r_wh = rs.r_wh;
+        sleep(weaken_start + weaken_time_max - Date.now());
+
+        // DEBUG CHECKS
+        m0 = getServerMoneyAvailable(host)
+        s0 = getServerSecurityLevel(host);
+        if (m0 != m) {
+            throw sprintf("%s after grow: %s=m != m0=%s",
+                          host, nFormat(m, "0.000a"), nFormat(m0, "0.000a"));
+        }
+        if (s0 - s > 0.001) {
+            throw sprintf("%s after grow: %f=s != s0=%f", host, s, s0);
+        }
+    }
+}
+
+main();

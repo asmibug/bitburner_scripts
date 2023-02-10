@@ -1,0 +1,2 @@
+sleep(args[1] - Date.now() - 100);
+hack(args[0]);

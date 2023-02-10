@@ -1,0 +1,40 @@
+function main() {
+    var threads = Number(args[0]);
+    if (isNaN(threads)) {
+        throw "Please specify number of threads of this program";
+    }
+
+    disableLog("getHackingLevel");
+    disableLog("getServerSecurityLevel");
+
+    var network_info = JSON.parse(read("/data/network_info.txt"));
+    var list = network_info.list;
+    var list_length = list.length;
+    var required_level = network_info.required_level;
+    var min_security = network_info.min_security;
+    var max_money = network_info.max_money
+    while (true) {
+        var weakened = 0;
+        for (var i = 0; i < list_length; ++i) {
+            var host = list[i];
+            if (required_level[host] <= getHackingLevel()
+                && getServerSecurityLevel(host) >= min_security[host] + 0.05 * threads
+                    && max_money[host] > 0) {
+                weaken(host);
+                ++weakened;
+            } else {
+                printf("INFO skipping %s; level: %d/%d, security: %.2f/%.2f; max_money: %s",
+                       host,
+                       getHackingLevel(host), required_level[host],
+                       getServerSecurityLevel(host), min_security[host],
+                       nFormat(max_money[host], "0.000a"));
+            }
+        }
+        if (!weakened) {
+            sleep(60 * 1000);
+        }
+    }
+}
+
+
+main();

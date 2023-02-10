@@ -1,0 +1,6 @@
+function main() {
+    sleep(args[0] - Date.now() - 9900);
+    spawn.apply(null, args.slice(1));
+}
+
+main();

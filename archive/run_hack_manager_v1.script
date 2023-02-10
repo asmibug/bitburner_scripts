@@ -1,0 +1,41 @@
+import {
+    nF,
+} from "lib.script";
+
+var HOST_FOR_SCRIPTS = "myserver-0";
+
+function main() {
+    var fh = formulas.hacking;
+
+    scp(["hack_hack.script", "hack_grow.script", "hack_weaken.script"], HOST_FOR_SCRIPTS);
+
+    var player = getPlayer();
+    function exec_manager(host) {
+        var server = getServer(host);
+        var m = server.moneyMax;
+        var m0 = server.moneyAvailable;
+        var s = server.minDifficulty;
+        var s0 = server.hackDifficulty;
+        printf("INFO %s: m=%s, m0=%s, s=%f, s0=%f",
+               host, nF(m), nF(m0), s, s0);
+
+        var weaken_finish = Date.now(); 
+        if (s0 - s > 0.001) {
+            var weaken_time = fh.weakenTime(server, player);
+            exec("hack_weaken.script", HOST_FOR_SCRIPTS, Math.ceil((s0 - s) / 0.05), host);
+            weaken_finish = Date.now() + weaken_time;
+        }
+
+        server.hackDifficulty = s;
+        var g = fh.growPercent(server, 1, player);
+
+        // exec("script_wait_and_spawn.script", getHostname(), 1,
+        //      weaken_finish, "hack_manager_v1.script", 1,
+        //      host, g, m, HOST_FOR_SCRIPTS);
+        exec("hack_manager_v1.script", getHostname(), 1,
+             host, g, m, HOST_FOR_SCRIPTS);
+    }
+    args.map(exec_manager);
+}
+
+main();

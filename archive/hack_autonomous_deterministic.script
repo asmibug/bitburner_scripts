@@ -1,0 +1,41 @@
+function main() {
+    if (args.length < 4) {
+        throw "Please specify threads, host, min_security, max_money";
+    }
+    var threads = Number(args[0]);
+    if (isNaN(threads)) {
+        throw sprintf("threads must be number, got %s", threads);
+    }
+    var host = args[1];
+    var min_security = Number(args[2]);
+    if (isNaN(min_security)) {
+        throw sprintf("min_security must be number, got %s", min_security);
+    }
+    var max_money = Number(args[3]);
+    if (isNaN(max_money)) {
+        throw sprintf("max_money must be number, got %s", max_money);
+    }
+    var max_hacks = args[4];
+
+    var max_grow_coef = 1;
+    var hacks = 0;
+
+    while (true) {
+        if (getServerSecurityLevel(host) >= min_security + 0.05 * threads) {
+            weaken(host);
+        } else if (getServerMoneyAvailable(host) < Math.max(max_money / max_grow_coef, threads)
+                   || (hacks >= max_hacks)) {
+            var grow_coef = grow(host);
+            if (grow_coef > max_grow_coef) {
+                max_grow_coef = grow_coef;
+            }
+            hacks = 0;
+        } else {
+            if (hack(host) > 0) {
+                ++hacks;
+            }
+        }
+    }
+}
+
+main()

@@ -1,0 +1,28 @@
+var FNAME_HACKABLE_HOSTS = "/data/network_hackable_hosts.txt";
+
+function main() {
+    var hosts_list = JSON.parse(read("/data/network_info.txt")).list;
+    if (fileExists(FNAME_HACKABLE_HOSTS)) {
+        var hackable_hosts = read(FNAME_HACKABLE_HOSTS).split(",").slice(0, -1);
+        for (var i = 0; i < hackable_hosts.length; ++i) {
+            hosts_list.splice(hosts_list.indexOf(hackable_hosts[i]), 1);
+        }
+    }
+    while (hosts_list.length) {
+        for (var i = 0; i < hosts_list.length;) {
+            if (getServerRequiredHackingLevel(hosts_list[i]) <= getHackingLevel()) {
+                var host = hosts_list.splice(i, 1)[0];
+                tprintf("WARN host %s is now open", host);
+                write(FNAME_HACKABLE_HOSTS, sprintf("%s,", host), "a");
+            } else {
+                ++i;
+            }
+        }
+        if (hosts_list.length) {
+            sleep(5 * 60 * 1000);
+        }
+    }
+}
+
+
+main()

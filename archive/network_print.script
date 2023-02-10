@@ -1,0 +1,124 @@
+import {
+    nF,
+    networkInfoGetFilename, networkInfoGet,
+    solve, calc_rhs, calc_rgs, 
+} from "lib.script";
+
+function main() {
+    var fh = formulas.hacking;
+    var start = Date.now();
+
+    var network_info = networkInfoGet();
+    var stats = network_info.stats;
+
+    var player = getPlayer();
+    var hacking_level = player.skills.hacking;
+
+    function is_hackable(host) {
+        var stat = stats[host];
+        return (hacking_level >= stat[2] && stat[4]);
+    }
+
+    function is_fast_hackable(host) {
+        var server = getServer(host);
+        server.hackDifficulty = server.minDifficulty;
+        return (fh.weakenTime(server, player) <= 60000
+                && hacking_level >= server.requiredHackingSkill
+                && server.moneyMax);
+    }
+
+    function print_money_for_manager_v1(host) {
+        var server = getServer(host);
+        server.hackDifficulty = server.minDifficulty;
+        var h = fh.hackPercent(server, player);
+        var g = fh.growPercent(server, 1, player);
+        var p = fh.hackChance(server, player);
+
+        function get_r(r) {
+            return (1 - Math.exp(-(1.04 / 1.08 * Math.log(g) + 2 * h) * r)) / h;
+        }
+        var r = Math.floor(solve(get_r, 0.9 / h));
+        var r_hall = Math.ceil(1.04 * r);
+        var r_gall = Math.ceil(1.08 * Math.ceil(-Math.log(1 - h * r) / Math.log(g)));
+        var mpt = (
+            server.moneyMax * h * r * (1 - Math.pow(1 - p, 3))
+        ) / (2 * fh.weakenTime(server, player) / 1e3 + 2);
+        var r_max = Math.max(r_hall, r_gall);
+
+        tprintf("%18s: mpt=%s, mptpt=%s, r_max=%d, r_hall=%d, r_gall=%d, r*h=%f",
+                host, nF(mpt), nF(mpt / r_max), r_max, r_hall, r_gall, r*h);
+    }
+
+    function print_money_for_manager(host) {
+        var server = getServer(host);
+        server.hackDifficulty = server.minDifficulty;
+        var m = server.moneyMax;
+        var h = fh.hackPercent(server, player);
+        var g = fh.growPercent(server, 1, player);
+        var p = fh.hackChance(server, player);
+        var w_t = fh.weakenTime(server, player) / 1e3;
+        
+        function get_r(r) {
+            return (1 - Math.exp(-(1.04 / 1.08 * Math.log(g) + 2 * h) * r)) / h;
+        }
+        var r = Math.floor(solve(get_r, 0.9 / h));
+        var r_hall = Math.ceil(1.04 * r);
+        var r_gall = Math.ceil(1.08 * Math.ceil(-Math.log(1 - h * r) / Math.log(g)));
+        var mpt = (
+            m * h * r * p
+        ) / w_t;
+        var r_all = r_hall + r_gall;
+        var mptpt_max = m * h * p / w_t / (1.04 + 1.08 * h / Math.log(g));
+
+        tprintf("%18s: mpt=%s, mptpt=%s, mptpt_max=%s, r_all=%d, r_hall=%d, r_gall=%d, r*h=%f",
+                host, nF(mpt), nF(mpt / r_all), nF(mptpt_max), r_all, r_hall, r_gall, r*h);
+    }
+
+    function print_times(host) {
+        var server = getServer(host);
+        server.hackDifficulty = server.minDifficulty;
+
+        var h_t = fh.hackTime(server, player) / 1000;
+        var g_t = fh.growTime(server, player) / 1000;
+        var w_t = fh.weakenTime(server, player) / 1000;
+
+        tprintf("%s: h_t=%f, g_t=%f, w_t=%f, w_t/g_t=%f, w_t/h_t=%f",
+                host, h_t, g_t, w_t, w_t / g_t, w_t / h_t);
+    }
+
+    function print_coefs(host) {
+        var server = getServer(host);
+        server.hackDifficulty = server.minDifficulty;
+        var m = server.moneyMax;
+        var h = fh.hackPercent(server, player);
+        var p = fh.hackChance(server, player);
+        var g = fh.growPercent(server, 1, player);
+        var r_h = calc_rhs(h, g).r_h;
+        var m0 = m * (1 - h * r_h);
+        var r_g = calc_rgs(g, m, m0).r_g;
+
+        tprintf("%18s: h=%f; p=%f; g=%f; m=%f; r_h=%f, r_g=%f",
+                host, h, p, g, m, r_h, r_g);
+    }
+
+    function print_ram(host) {
+        tprintf("%18s: ram = %d", host, getServerMaxRam(host));
+    }
+
+    function print_level(host) {
+        tprintf("%18s: level = %d", host, getServerRequiredHackingLevel(host));
+    }
+
+    var hosts;
+    if (args.length) {
+        hosts = args;
+    } else {
+        hosts = network_info.list.filter(is_hackable);
+    }
+    tprintf("%s\n", hosts.join(" "));
+    hosts.forEach(print_money_for_manager);
+
+    tprintf("INFO DONE; printing tree took %f s", (Date.now() - start) / 1000);
+}
+
+main();

@@ -1,0 +1,136 @@
+// req: lib.script
+// req: network_save.script
+// req: test_hack_grow_n00dles.script
+// req: test_create_coefs.script
+
+import {
+    networkInfoGetFilename,
+    networkInfoGetScriptname,
+    networkInfoCreateWithExec,
+    networkInfoGet,
+    networkInfoGetPortsRequired,
+    nukeAll,
+    networkInfoGetMaxRam,
+    solve,
+} from "lib.script";
+
+var HOST = "n00dles";
+var COEFS_N00DLES_FILENAME = "/data/test_coefs.txt";
+var SCRIPTS_FILENAME = "/data/test_scripts.txt";
+var SCRIPT = "test_hack_grow_n00dles.script";
+var CREATE_COEFS_SCRIPT = "test_create_coefs.script";
+var SCRIPT_MEM = 2;
+var THREADS = 2;
+
+function getRamInfo(network_info, min_ram) {
+    var hosts_list = network_info.list;
+    var hosts_list_length = hosts_list.length;
+    var stats = network_info.stats;
+    var ram_info = {list: [], ram: []};
+    var ram_list = ram_info.list;
+    var ram_ram = ram_info.ram;
+    for (var i = 0; i < hosts_list_length; ++i) {
+        var host = hosts_list[i];
+        var max_ram = networkInfoGetMaxRam(stats[host]);
+        if (!hasRootAccess(host) || !max_ram) {
+            continue;
+        }
+        var available_ram = max_ram - getServerUsedRam(host);
+        if (available_ram < min_ram) {
+            continue;
+        }
+        ram_list.push(host);
+        ram_ram.push(available_ram);
+    }
+    return ram_info;
+}
+
+function calculatePG(r) {
+    return 1;
+    var coefs = JSON.parse(read(COEFS_N00DLES_FILENAME));
+    var h = coefs.h;
+    var g = coefs.g;
+    var h_t = getHackTime(HOST);
+    var p = 1;
+    var g_t = getGrowTime(HOST);
+    var w_t = getWeakenTime(HOST);
+
+    var a = 1 - h * r;
+    var b = h_t / p + 0.04 * w_t;
+    var c = g_t + 0.08 * w_t;
+
+    var k_max = -r * Math.log(g) / Math.log(a);
+    printf("INFO k_max=%f", k_max);
+
+    function get_k(k) {
+        return -Math.log(1 - Math.log(a) * (k + c / b)) / Math.log(a);
+    }
+    var k = solve(get_k, 0);
+    printf("INFO k=%f", k);
+
+    return Math.max(1.2 / k_max, 1 / k);
+}
+
+function runScripts(ram_info, scripts_info) {
+    var hosts_list = ram_info.list;
+    var hosts_list_length = hosts_list.length;
+    var ram_list = ram_info.ram;
+    var p_g = calculatePG(THREADS);
+    for (var i = 0; i < hosts_list_length; ++i) {
+        var host = hosts_list[i];
+        var ram = ram_list[i];
+        scp(["lib.script", SCRIPT], host);
+        for (var j = 0; j < ram; j += SCRIPT_MEM * THREADS) {
+            scripts_info.threads += THREADS;
+            write(SCRIPTS_FILENAME, JSON.stringify(scripts_info), "w");
+            exec(SCRIPT, host, THREADS, p_g, scripts_info.threads);
+        }
+    }
+}
+
+function main() {
+    if (!read(networkInfoGetFilename()).length) {
+        networkInfoCreateWithExec(getHostname());
+    }
+    var network_info = networkInfoGet();
+
+    if (!read(COEFS_N00DLES_FILENAME).length) {
+        var pid = exec(CREATE_COEFS_SCRIPT, getHostname());
+        if (!pid) {
+            throw sprintf("Could not run %s", CREATE_COEFS_SCRIPT);
+        }
+        while (isRunning(pid)) {
+            sleep(1000);
+        }
+    }
+    printf("INFO coefs=%s", read(COEFS_N00DLES_FILENAME));
+
+    var scripts_info = {threads: 0};
+    if (read(SCRIPTS_FILENAME).length) {
+        scripts_info = JSON.parse(read(SCRIPTS_FILENAME));
+    }
+    printf("INFO scripts_info=%s", JSON.stringify(scripts_info));
+
+    var programs_available_num = 0;
+    while (programs_available_num < 5) {
+        printf("INFO rooting servers");
+        var nuke_info = nukeAll(network_info);
+        programs_available_num = nuke_info.programs_available_num;
+        printf("INFO DONE rooting servers; programs available: %d, servers nuked: %d",
+            programs_available_num, nuke_info.hosts_nuked_num);
+        
+        var ram_required = SCRIPT_MEM * THREADS;
+        printf("INFO getting servers with %d of ram", ram_required);
+        var ram_info = getRamInfo(network_info, ram_required);
+        printf("INFO DONE getting %d servers with %d of ram",
+               ram_info.list.length, ram_required);
+
+        printf("INFO running scripts");
+        runScripts(ram_info, scripts_info);
+        printf("INFO DONE running scripts");
+
+        sleep(1000);
+    }
+}
+
+main();

@@ -1,0 +1,37 @@
+import {processTree, networkInfoGetFilename, networkInfoGetStats} from "lib.script";
+
+function saveHost(host, hosts_info, route) {
+    route.push(host);
+    hosts_info.list.push(host);
+    hosts_info.route[host] = route.slice();
+    hosts_info.stats[host] = networkInfoGetStats(host);
+}
+
+function popHost(route) {
+    route.pop();
+}
+
+function main() {
+    var hosts_info = {
+        list: [],
+        route: {},
+        stats: {},
+    };
+    var route = [];
+    function callback_pre(host) {
+        saveHost(host, hosts_info, route);
+    }
+    function callback_post(host) {
+        popHost(route);
+    }
+
+    tprintf("INFO processing network");
+    var start = Date.now();
+    processTree("home", undefined, callback_pre, callback_post);
+    tprintf("INFO DONE; processing network took %f s", (Date.now() - start) / 1000);
+
+    write(networkInfoGetFilename(), JSON.stringify(hosts_info), "w");
+    tprintf("INFO network info was saved to %s", networkInfoGetFilename());
+}
+
+main();

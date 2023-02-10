@@ -1,0 +1,13 @@
+var HOST = "n00dles";
+var THREADS = 2;
+
+var SCRIPT_NAME = "all_weaken.script";
+
+
+function main() {
+    scp([SCRIPT_NAME, "/data/network_info.txt"], HOST);
+    exec(SCRIPT_NAME, HOST, THREADS, THREADS);
+}
+
+
+main();

@@ -1,0 +1,183 @@
+// requirements:
+// * nodes are not bought and upgraded manually, only with the help of this script
+
+import {getLowerN, nF} from "lib.script";
+
+
+var SLEEP_PERIOD_MS = 5 * 60 * 1000;
+var FILENAME_WITH_FULL_UPGRADE_COST = "/data/hacknet_upgrade_cost.txt";
+
+function waitBuyNode() {
+    printf("INFO Buying new node");
+    var new_node_idx = hacknet.purchaseNode();
+    while (new_node_idx == -1) {
+        sleep(SLEEP_PERIOD_MS);
+        new_node_idx = hacknet.purchaseNode();
+    }
+    printf("INFO DONE Bying new node number %d", new_node_idx);
+    return new_node_idx;
+}
+
+function waitUpgradeNode(node_idx, num_upgrades, cost_func, upgrade_func) {
+    // num_upgrades must be not greater than maximum upgrades number
+
+    function upgrade_cost_func(num_upgrades) {
+        return cost_func(node_idx, num_upgrades);
+    }
+
+    while (num_upgrades > 0 && !upgrade_func(node_idx, num_upgrades)) {
+        var money = getServerMoneyAvailable("home");
+        var affordable_upgrades = getLowerN(num_upgrades, money, upgrade_cost_func);
+        if (affordable_upgrades && upgrade_func(node_idx, affordable_upgrades)) {
+            num_upgrades -= affordable_upgrades;
+            printf("INFO upgraded for %d, left: %d", affordable_upgrades, num_upgrades);
+        } else {
+            printf("INFO can't afford any upgrades yet");
+            sleep(SLEEP_PERIOD_MS);
+        }
+    }
+}
+
+function upgradeAsZero(node_idx) {
+    var log_msg = sprintf("upgrading node %d as zero node", node_idx);
+    printf("INFO %s", log_msg);
+
+    var zero_node_stats = hacknet.getNodeStats(0);  // level, ram, cores
+    var node_stats = hacknet.getNodeStats(node_idx);
+    var level_steps = zero_node_stats.level - node_stats.level;
+    var ram_steps = Math.log(zero_node_stats.ram / node_stats.ram) / Math.log(2);
+    var core_steps = zero_node_stats.cores - node_stats.cores;
+
+    printf("INFO upgrading level for %d", level_steps);
+    waitUpgradeNode(node_idx, level_steps, hacknet.getLevelUpgradeCost, hacknet.upgradeLevel);
+    printf("INFO upgrading ram for %d", ram_steps)
+    waitUpgradeNode(node_idx, ram_steps, hacknet.getRamUpgradeCost, hacknet.upgradeRam);
+    printf("INFO upgrading cores for %d", core_steps);
+    waitUpgradeNode(node_idx, core_steps, hacknet.getCoreUpgradeCost, hacknet.upgradeCore);
+
+    printf("INFO DONE %s", log_msg);
+}
+
+function getUpgradeAsZeroCost(node_idx) {
+    var zero_node_stats = hacknet.getNodeStats(0);  // level, ram, cores
+    var node_stats = hacknet.getNodeStats(node_idx);
+    var level_steps = zero_node_stats.level - node_stats.level;
+    var ram_steps = Math.log(zero_node_stats.ram / node_stats.ram) / Math.log(2);
+    var core_steps = zero_node_stats.cores - node_stats.cores;
+
+    return (hacknet.getLevelUpgradeCost(node_idx, level_steps)
+            + hacknet.getRamUpgradeCost(node_idx, ram_steps)
+            + hacknet.getCoreUpgradeCost(node_idx, core_steps));
+}
+
+function isZeroFullyUpgraded(upgrade_costs) {
+    return Math.min.apply(Math, upgrade_costs.slice(1)) == Infinity;
+}
+
+
+function main() {
+    print("INFO getting args");
+    var max_hours_to_pay_off = Number(args[0]);
+    if (isNaN(max_hours_to_pay_off)) {
+        throw "Please specify first arg, max_hours_to_pay_off, which is now " + max_hours_to_pay_off;
+    }
+    printf("INFO max_hours_to_pay_off = %d", max_hours_to_pay_off);
+
+    var num_nodes = hacknet.numNodes();
+    printf("INFO now there are %d nodes", num_nodes);
+
+    if (!num_nodes) {
+        if (read(FILENAME_WITH_FULL_UPGRADE_COST).length) {
+            printf("INFO clearing file %s with full upgrade cost since we have restart",
+                   FILENAME_WITH_FULL_UPGRADE_COST);
+            clear(FILENAME_WITH_FULL_UPGRADE_COST);
+        }
+        printf("INFO there are no nodes yet, so we buy zero node");
+        num_nodes = waitBuyNode() + 1;
+    }
+
+    printf("INFO making sure all nodes are upgraded like zero one");
+    for (var i = 1; i < num_nodes; ++i) {
+        upgradeAsZero(i);
+    }
+    printf("INFO DONE making sure all nodes are upgraded like zero one");
+
+    var upgrade_costs = [
+        hacknet.getPurchaseNodeCost(),
+        hacknet.getLevelUpgradeCost(0, 1),
+        hacknet.getRamUpgradeCost(0, 1),
+        hacknet.getCoreUpgradeCost(0, 1),
+    ];
+    var fully_upgraded = isZeroFullyUpgraded(upgrade_costs);
+    while (!fully_upgraded) {
+        var upgrade_type = upgrade_costs.indexOf(Math.min.apply(Math, upgrade_costs));
+        // if we buy new node, we upgrade it like zero one
+        // if we upgrade zero node, we upgrade all other as well
+        switch (upgrade_type) {
+          case 0:
+            num_nodes = waitBuyNode() + 1;
+            upgradeAsZero(num_nodes - 1);
+            upgrade_costs[upgrade_type] = hacknet.getPurchaseNodeCost();
+            break;
+          case 1:
+            for (var i = 0; i < num_nodes; ++i) {
+                printf("INFO upgrading level for %d node", i);
+                waitUpgradeNode(i, 1, hacknet.getLevelUpgradeCost, hacknet.upgradeLevel);
+            }
+            upgrade_costs[upgrade_type] = hacknet.getLevelUpgradeCost(0, 1);
+            break;
+          case 2:
+            for (var i = 0; i < num_nodes; ++i) {
+                printf("INFO upgrading ram for %d node", i);
+                waitUpgradeNode(i, 1, hacknet.getRamUpgradeCost, hacknet.upgradeRam);
+            }
+            upgrade_costs[upgrade_type] = hacknet.getRamUpgradeCost(0, 1);
+            break;
+          case 3:
+            for (var i = 0; i < num_nodes; ++i) {
+                printf("INFO upgrading cores for %d node", i);
+                waitUpgradeNode(i, 1, hacknet.getCoreUpgradeCost, hacknet.upgradeCore);
+            }
+            upgrade_costs[upgrade_type] = hacknet.getCoreUpgradeCost(0, 1);
+            break;
+          default:
+            throw sprintf("Unknown upgrade type: %d", upgrade_type)
+        }
+        fully_upgraded = isZeroFullyUpgraded(upgrade_costs);
+    }
+    printf("INFO zero node is fully upgraded");
+    // now, when zero node is fully upgraded, we can know max production and full upgrade cost
+
+    var max_node_production = hacknet.getNodeStats(0).production;
+    printf("INFO max node production: %s per second", nF(max_node_production));
+
+    var full_upgrade_cost = Infinity;
+    if (!read(FILENAME_WITH_FULL_UPGRADE_COST).length) {
+        num_nodes = waitBuyNode() + 1;
+        full_upgrade_cost = getUpgradeAsZeroCost(num_nodes - 1);
+        printf("INFO saving full upgrade cost %s to %s", nF(full_upgrade_cost), FILENAME_WITH_FULL_UPGRADE_COST);
+        write(FILENAME_WITH_FULL_UPGRADE_COST, JSON.stringify(full_upgrade_cost), "w");
+        upgradeAsZero(num_nodes - 1);
+    } else {
+        full_upgrade_cost = JSON.parse(read(FILENAME_WITH_FULL_UPGRADE_COST));
+        printf("INFO full upgrade cost %s was read from %s", nF(full_upgrade_cost), FILENAME_WITH_FULL_UPGRADE_COST);
+    }
+
+    // and, since we know max production and full upgrade cost, we can calculate hours to pay off
+    var new_node_cost = hacknet.getPurchaseNodeCost() + full_upgrade_cost;
+    var hours_to_pay_off = new_node_cost / max_node_production / 3600;
+    while (hours_to_pay_off <= max_hours_to_pay_off) {
+        printf("INFO new node cost: %s, hours to pay off: %f", nF(new_node_cost), hours_to_pay_off);
+        num_nodes = waitBuyNode() + 1;
+        upgradeAsZero(num_nodes - 1);
+        new_node_cost = hacknet.getPurchaseNodeCost() + full_upgrade_cost;
+        hours_to_pay_off = new_node_cost / max_node_production / 3600;
+    }
+    var msg = sprintf("INFO new node cost: %s; hours to pay off = %f > %f = max hours to pay off",
+                      nF(new_node_cost), hours_to_pay_off, max_hours_to_pay_off);
+    print(msg);
+    tprint(msg);
+}
+
+
+main();

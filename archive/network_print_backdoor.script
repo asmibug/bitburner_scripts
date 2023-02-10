@@ -1,0 +1,19 @@
+import {networkInfoGetFilename, networkInfoGet} from "lib.script";
+
+function main() {
+    tprintf("INFO printing routes to servers without backdoor");
+    var start = Date.now();
+    var network_info = networkInfoGet();
+    var level = getHackingLevel();
+    function print_no_backdoor(host) {
+        var info = getServer(host);
+        if (info.requiredHackingSkill <= level && !info.backdoorInstalled
+                && !info.purchasedByPlayer) {
+            tprintf("%s", network_info.route[host].join("; connect "))
+        }
+    }
+    network_info.list.forEach(print_no_backdoor);
+    tprintf("INFO DONE; printing took %f s", (Date.now() - start) / 1000);
+}
+
+main();

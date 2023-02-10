@@ -1,0 +1,12 @@
+import {networkInfoGetFilename, networkInfoGet} from "lib.script";
+
+function main() {
+    var network_info = networkInfoGet();
+    var hosts_list = network_info.list;
+    var hosts_list_length = hosts_list.length;
+    for (var i = 0; i < hosts_list_length; ++i) {
+        killall(hosts_list[i], true);
+    }
+}
+
+main();

@@ -1,0 +1,118 @@
+function getMinUpgradeType(node_idx) {
+    costs = [hacknet.getLevelUpgradeCost(node_idx, 1),
+             hacknet.getRamUpgradeCost(node_idx, 1),
+             hacknet.getCoreUpgradeCost(node_idx, 1)];
+    min_cost = costs[0];
+    upgrade_type = 0;
+    for (var j = 1; j < costs.length; ++j) {
+        if (costs[j] < min_cost) {
+            min_cost = costs[j];
+            upgrade_type = j;
+        }
+    }
+    return {upgrade_cost: min_cost, upgrade_type: upgrade_type};
+}
+
+
+function fillNodes() {
+    var nodes = [];
+    var num_nodes = hacknet.numNodes();
+    for (var i = 0; i < num_nodes; ++i) {   
+        nodes.push(getMinUpgradeType(i));
+    }
+    return nodes;
+}
+
+function getMinUpgradeInfo(nodes) {
+    min_upgrade_cost = hacknet.getPurchaseNodeCost();
+    min_upgrade_idx = -1;
+    for (var i = 0; i < nodes.length; ++i) {
+        if (nodes[i].upgrade_cost < min_upgrade_cost) {
+            min_upgrade_cost = nodes[i].upgrade_cost;
+            min_upgrade_idx = i;
+        }
+    }
+    return {cost: min_upgrade_cost, node: min_upgrade_idx};
+}
+
+function getMaxProduction() {
+    var max_production = 0;
+    var num_nodes = hacknet.numNodes();
+    for (var i = 0; i < num_nodes; ++i) {
+        production = hacknet.getNodeStats(i).production
+        if (production > max_production) {
+            max_production = production;
+        }
+    }
+    return max_production;
+}
+
+function doNodeUpgrade(min_upgrade_info, nodes) {
+    var node_idx = min_upgrade_info.node;
+    if (node_idx == -1) {
+        print("INFO buying new node");
+        new_node_idx = hacknet.purchaseNode();
+        if (new_node_idx == -1) {
+            throw "Failed to purchase node " + hacknet.numNodes();
+        }
+        nodes.push(getMinUpgradeType(new_node_idx));
+    } else {
+        switch (nodes[node_idx].upgrade_type) {
+            case 0:
+                print("INFO upgrading level");
+                if (!hacknet.upgradeLevel(node_idx, 1)) {
+                    throw "Could not upgrade Level of node " + node_idx;
+                }
+                break;
+            case 1:
+                print("INFO upgrading RAM");
+                if (!hacknet.upgradeRam(node_idx, 1)) {
+                    throw "Could not upgrade RAM of node " + node_idx;
+                }
+                break;
+            case 2:
+                print("INFO upgrading CPU");
+                if (!hacknet.upgradeCore(node_idx, 1)) {
+                    throw "Could not upgrade CPU of node" + node_idx;
+                }
+                break;
+            default:
+                throw "Unknown upgrade_type: " + nodes[node_idx].upgrade_type;
+        }
+        nodes[node_idx] = getMinUpgradeType(node_idx);
+    }
+    return nodes;
+}
+
+
+print("INFO getting args");
+var max_hours_to_pay_off = args[0];
+print("INFO max_hours_to_pay_off = " + max_hours_to_pay_off);
+
+print("INFO filling nodes list");
+var nodes = fillNodes();
+print("INFO filled " + nodes.length + " nodes");
+print("INFO getting min upgrade info");
+var min_upgrade_info = getMinUpgradeInfo(nodes);
+print("INFO min_upgrade_node = " + min_upgrade_info.node + "; min_upgrade_cost = " + min_upgrade_info.cost);
+print("INFO getting max production");
+var max_production = getMaxProduction();
+print("INFO max_production = " + max_production);
+
+var hours_to_pay_off = min_upgrade_info.cost / (max_production != 0 ? max_production : min_upgrade_info.cost) / 60 / 60;
+while (hours_to_pay_off <= max_hours_to_pay_off) {
+    print("INFO current hours to pay off: " + hours_to_pay_off + " <= " + max_hours_to_pay_off);
+    var current_money = getServerMoneyAvailable("home");
+    while (current_money < min_upgrade_info.cost) {
+        print("INFO current_money = " + current_money + " < " + min_upgrade_info.cost + " = min_upgrade_cost");
+        sleep(5 * 60 * 1000);
+        current_money = getServerMoneyAvailable("home");
+    }
+    print("INFO upgrading " + min_upgrade_info.node + " node for " + min_upgrade_info.cost);
+    nodes = doNodeUpgrade(min_upgrade_info, nodes);
+    min_upgrade_info = getMinUpgradeInfo(nodes);
+    max_production = getMaxProduction();
+    hours_to_pay_off = min_upgrade_info.cost / max_production / 60 / 60;
+}
+print("INFO current hours to pay off: " + hours_to_pay_off + " > " + max_hours_to_pay_off);
+tprint("INFO hacknet is set up for max_hours_to_pay_off = " + max_hours_to_pay_off);

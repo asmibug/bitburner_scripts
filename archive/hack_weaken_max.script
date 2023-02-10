@@ -1,0 +1,17 @@
+function main() {
+    if (args.length < 2) {
+        throw "Please specify host, min_security";
+    }
+    var host = args[0];
+    var min_security = Number(args[1]);
+    if (isNaN(min_security)) {
+        throw sprintf("min_security must be number, got %s", min_security);
+    }
+
+    while(getServerSecurityLevel(host) > min_security) {
+        weaken(host);
+    }
+    tprintf("INFO weakened %s to min security %f", host, min_security);
+}
+
+main();
